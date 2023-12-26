@@ -9,6 +9,8 @@
 Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_RGB + NEO_KHZ800);
 
 #define LOW_THRESHOLD 30
+#define STEP_SIZE 2
+#define DELAY_TIME 25
 
 /* DIGITAL IO */
 #define MSGEQ7_RESET 4
@@ -43,11 +45,6 @@ int opMode;
 int oldOpMode;
 int opModeBlinkCnt;
 int eqPulseWidth;
-int delayTime;
-int lightThreshold;
-int stepSize;
-int mode = 0;
-int modeLimit = 7;
 uint32_t counter = 0;
 bool on = true;
 
@@ -74,10 +71,8 @@ void setup() {
 }
  
 void loop() {
-    on = true;
     initializefreqArr();
     guitarHeroLights();
-    counter++;
     delay(1);
     strip.show();
 }
@@ -118,15 +113,15 @@ void initializefreqArr(void) {
  */
 
 void calibrateFreqArr() {
-  if (counter % delayTime == 0) { // Wait untill the delay time before taking a step.
+  if (counter % DELAY_TIME == 0) { // Wait untill the delay time before taking a step.
     uint32_t colArr[7];
     for (int i = 0; i < NUM_BANDS; i++) {
-      if (freqArr[i] < lightThreshold) { // Noise isn't loud enough to be over the threshold so ignor it. 
-        freqArr[i] = lightThreshold; 
+      if (freqArr[i] < LOW_THRESHOLD) { // Noise isn't loud enough to be over the threshold so ignor it. 
+        freqArr[i] = LOW_THRESHOLD; 
       }
       // Take the difference between the old and new freq, and divide by the step size.
       // Then take that value and ad or subtract it from the old value. 
-      freqArrOld[i] += (freqArr[i] - freqArrOld[i])/stepSize;
+      freqArrOld[i] += (freqArr[i] - freqArrOld[i])/STEP_SIZE;
     }
   }
 }
@@ -143,34 +138,26 @@ void calibrateFreqArr() {
  */
  
 void guitarHeroLights() {
-  lightThreshold = 0;
-  delayTime = 25;
-  stepSize = 1;
   uint8_t yesItNeedsASecondDelay = 5;
+  counter++;
   calibrateFreqArr();
   if (counter % yesItNeedsASecondDelay == 0) {
-    uint32_t ledArr[LED_COUNT];
+    uint32_t ledArr[LED_COUNT]; // combine the frequencies in pairs and use the results as rgb values.
     uint8_t colorArr[3];
     for (int i = 0; i < 3; ++i) {
      int freqOne = freqArrOld[i * 2];
      int freqTwo = freqArrOld[i * 2 + 1]; 
-     // The way I wrote the threshold in the calibrateFreqArr function doesn't allow for a fully dark if below threshold.
-     // So this is just not displaying anything below 30. 
-     if (freqOne <= LOW_THRESHOLD) {
-      freqOne = 0;
-     }
-     if (freqTwo <= LOW_THRESHOLD) {
-      freqTwo = 0;
-     }
+     freqOne <= LOW_THRESHOLD ? freqOne = 0 : freqOne = freqOne; // Display nothing if the frequency is below threshold
+     freqTwo <= LOW_THRESHOLD ? freqTwo = 0 : freqTwo = freqTwo;
      colorArr[i] = (freqOne + freqTwo) / 2;
     }
     uint32_t note = strip.Color(colorArr[0], colorArr[1], colorArr[2]);
     ledArr[0] = note;
-    strip.setPixelColor(0, ledArr[0]);
-    for (int i = LED_COUNT; i > 0; --i) {
+    for (int i = LED_COUNT; i > 0; --i) { // Shift all the colors over one pixel toward the end of the strip.
       ledArr[i] = ledArr[i - 1];
       strip.setPixelColor(i, ledArr[i]);
     }
+    strip.setPixelColor(0, ledArr[0]); // Set pixel 0 the new color.
   }
 }
 
